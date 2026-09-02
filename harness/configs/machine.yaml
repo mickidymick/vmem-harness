@@ -1,0 +1,24 @@
+# corsys4 — the machine facts the harness needs. One place, not scattered in a
+# bash script. See ~/Projects/mlc for the measured DRAM/Optane characterization.
+name: corsys4
+dram_node: 0            # 192 GB DDR4, all CPUs
+pmem_node: 1            # 730 GB Optane, cpuless (KMEM DAX)
+vpage_bytes: 2097152    # 2 MB vpages
+pool_cap_vpages: 16384  # 32 GB / 2 MB — the hugetlb pool ceiling per node
+omp_threads: 16
+
+# the vmem runtime (moved here in the 2026-08 reorg)
+vmem_repo: ~/Projects/vmem-work/vmem
+
+# corsys4 has no DSA and no libdml, and the Makefile's default include path points
+# at the lost SPR node (/homes/...), so a bare `make` FAILS here. Every library
+# below must be built with:
+#     make VMEM_NO_DSA=1 clean && make VMEM_NO_DSA=1 all && make VMEM_NO_DSA=1 profile
+# `make profile` alone rebuilds only the profiler variants -- that is how the base
+# and profile libs drifted a month apart (Jul 23 vs Aug 19) before 2026-09-02.
+# Build all of them together so every condition in a ladder shares one revision.
+build_flags: VMEM_NO_DSA=1
+server_flags: "-H 21 -V 21 -D 35 -P 35"   # -D/-P overridden per-run by VMEM_*_PAGES
+libs:
+  base:    lib/libmimalloc-vmem.so             # mimalloc bridge, no profiler
+  profile: lib/libmimalloc-vmem-llc-profile.so # + LLC miss profiler (tiering needs it)

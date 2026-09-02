@@ -1,0 +1,26 @@
+# vmem/ is its own repository (gitlab.com:corsys/vmem) — never nest it here.
+/vmem/
+
+# Every run writes a fresh timestamped directory; results are reproduced, not tracked.
+/results/
+
+# Built benchmark binaries and build artifacts — rebuild via benchmarks/*/build.sh.
+benchmarks/*/run/exe
+benchmarks/*/src/*.o
+benchmarks/*/src/*.bc
+benchmarks/*/src/.*.bc
+benchmarks/*/src/lulesh2.0
+benchmarks/*/src/.ccls-cache/
+benchmarks/*/.attic/
+
+# Library/binary snapshots taken before a rebuild.
+*.bak-*
+
+# Logs and stats dumps.
+*.log
+*.stats
+*.stats.*
+vpage_llc_misses.out
+
+__pycache__/
+*.pyc

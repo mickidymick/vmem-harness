@@ -1,0 +1,12 @@
+# An experiment = benches x conditions x repeats. This is the whole spine of the
+# next paper's F1/F8 figures. Run it with:  vbench sweep placement-ladder
+name: placement-ladder
+description: The DRAM->PMEM placement gap and how much vmem demotion recovers.
+benches:
+  - lulesh
+conditions:
+  - all_dram
+  - first_touch
+  - vmem_demote
+  - all_pmem
+repeats: 3

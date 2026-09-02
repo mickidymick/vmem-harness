@@ -1,0 +1,35 @@
+# LULESH — self-describing benchmark record. The harness discovers benchmarks by
+# scanning benchmarks/*/bench.yaml, so adding one is dropping in a dir + this file.
+name: lulesh
+kind: openmp            # single-process OpenMP — run direct, NO mpirun (it throttles OMP)
+
+exe: run/exe            # the uniform location; harness cd's into run/ and runs ./exe
+args: "-s 300 -i 12 -r 11 -b 0 -c 64 -p"        # paper scale (~24 GB)
+
+# footprint is measured under the REAL 2 MB substrate (peak allocated vpages), not
+# glibc RSS. `vbench measure lulesh` writes it to run/footprint.txt (derived data,
+# kept out of this hand-written file).
+#
+# NOTE: measure runs the REAL workload (no measure_args override). A cheap -i 1 run
+# exits so fast it races vmem teardown, spawns a second init context that clobbers
+# the stats file with a bogus tiny footprint (5 vpages). The full run inits vmem
+# once and reports the true 12108 vpages (24 GiB). Correctness > speed here.
+
+# metric: LULESH prints a grind figure "(<grind> overall)". The regex has exactly
+# ONE capture group; the harness collects group 1 of every match and reduces.
+metric: '\(\s*([\d.]+)\s+overall\)'
+metric_reduce: max
+lower_is_better: true
+
+# correctness: LULESH prints a final origin energy; a tiered run must match the
+# untiered reference. The reference is NOT pinned here -- `vbench collect` takes it
+# from the all_dram condition of the same sweep, so the comparison is always against
+# a run of the same binary on the same input. `reference` stays for an optional
+# absolute pin later.
+#
+# NOTE: the separator is '=' followed by TWO spaces ("Energy =  2.596764e+08"), so
+# the pattern must be \s*=\s* -- a literal '= ' silently never matches and the
+# correctness check quietly reports nothing at all.
+correctness:
+  metric: 'Final Origin Energy\s*=\s*([\d.eE+-]+)'
+  reference: null

@@ -1,0 +1,5 @@
+#!/bin/bash
+# vbench launcher — run from anywhere. Puts the harness dir on PYTHONPATH so the
+# vbench package imports, then dispatches to the CLI.
+H="$(cd "$(dirname "$0")/.." && pwd)"   # .../vmem-work/harness
+exec env PYTHONPATH="$H:$PYTHONPATH" python3 -m vbench "$@"

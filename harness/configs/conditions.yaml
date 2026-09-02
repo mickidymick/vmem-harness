@@ -1,0 +1,30 @@
+# The placement-ladder conditions, as DATA. Each condition is one bar in the F1
+# figure. Two kinds:
+#   native : no vmem — numactl --membind to a node. The true reference endpoints.
+#   vmem   : through the vmem substrate on 2 MB pages; DRAM capped to dram_frac of
+#            the measured footprint, PMEM to pmem_frac. lib + knobs set the behavior.
+#
+# dram_frac/pmem_frac are fractions of the benchmark's measured footprint_vpages.
+# pmem_frac 1.30 = hold the 75% spill + up to 25% replicas + buffer.
+
+all_dram:                    # the floor (normalize everything to this)
+  kind: native
+  node: 0
+
+all_pmem:                    # worst case
+  kind: native
+  node: 1
+
+first_touch:                 # DRAM-first + spill, tiering OFF — the naive baseline
+  kind: vmem
+  dram_frac: 0.25
+  pmem_frac: 1.30
+  lib: base
+  knobs: off
+
+vmem_demote:                 # the headline: tuned demotion at 25% DRAM
+  kind: vmem
+  dram_frac: 0.25
+  pmem_frac: 1.30
+  lib: profile
+  knobs: l27_020

@@ -1,0 +1,24 @@
+# The plumbing check, not a result. Same four conditions as the real ladder, on a
+# ~0.9 GB LULESH input, one repeat: it proves the native path, the vmem path, pool
+# sizing, the server lifecycle, the metric regex and the summary all work end to end
+# in minutes instead of a day. Run this before every long sweep.
+#
+#   vbench sweep smoke
+#
+# footprint_vpages came from `vbench measure lulesh -a "<the args below>"` = 462
+# (0.90 GiB) on 2026-09-02 -- NOT from the paper-scale footprint.txt, which would
+# size the pools ~26x too large and make the smoke test nothing at all.
+name: smoke
+description: End-to-end plumbing check on a small LULESH input.
+benches:
+  - lulesh
+conditions:
+  - all_dram
+  - first_touch
+  - vmem_demote
+  - all_pmem
+repeats: 1
+overrides:
+  lulesh:
+    args: "-s 100 -i 10 -r 11 -b 0 -c 64 -p"
+    footprint_vpages: 462

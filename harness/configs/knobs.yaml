@@ -1,0 +1,17 @@
+# Named vmem tuning-knob sets. Referenced by name from conditions.yaml, so the
+# tuned config lives in ONE place instead of a bash string copied around.
+off:                                  # tiering disabled — the substrate, no migration
+  VMEM_REPL_INTERVAL_MS: 0
+  VMEM_PROMO_INTERVAL_MS: 0
+
+l27_020:                              # the tuned demotion winner from the L27 sweep
+  VMEM_LLC_PROFILE_EVENT: load
+  VMEM_LLC_PROFILE_SAMPLE_PERIOD: 100000
+  VMEM_LLC_PROFILE_INTERVAL_MS: 1000
+  VMEM_REPL_INTERVAL_MS: 200
+  VMEM_REPL_MAX_PER_TICK: 64
+  VMEM_REPL_INVAL_THRESH: 16
+  VMEM_REPL_MIN_AGE_MS: 0
+  VMEM_REPL_HOT_THRESH: 64
+  VMEM_EVICT_COLD_THRESH: 64
+  VMEM_PROMO_INTERVAL_MS: 0           # promotion off (demotion-only)
