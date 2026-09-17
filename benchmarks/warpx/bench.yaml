@@ -1,0 +1,38 @@
+# WarpX (laser-driven electron acceleration, 3D PIC) — self-describing benchmark record.
+name: warpx
+kind: openmp            # MPI-linked, run direct as one OpenMP process
+exe: run/exe            # 2024-07-10 build of WarpX be2fff113 (2022-06-30); see build.sh
+
+# Inputs live in the bench dir (tracked); both derive from memory-ef's
+# laser-driven_electron_acceleration_3d{,_large}.txt with full plotfile diags replaced
+# by reduced energy diags (the plotfiles wrote ~9 GB per run).
+#   paper: n_cell 256x256x3072, 20 steps. The memory-ef "large" (256x256x4096) peaked at
+#          26.6 GB RSS, past the ~24.6 GiB vmem ceiling; 3072 is 3/4 of it.
+#   smoke: n_cell 32x32x256, 20 steps, ~220 MB.
+# The window moves and electrons are injected continuously, so memory GROWS every step.
+args: "../warpx_paper.txt"
+
+# metric: WarpX's cumulative evolve time (the step loop), last printed value.
+metric: 'Evolve time = ([\d.]+) s;'
+metric_reduce: last
+lower_is_better: true
+
+# Reduced diags append rows to these files; deleting them first means a crashed run
+# has no final row to be scored with.
+outputs:
+  - diags/reducedfiles/EF.txt
+  - diags/reducedfiles/EP.txt
+
+# correctness: total field and particle energy at the last step. Deterministic --
+# two native smoke runs agreed to all 15 printed digits.
+correctness:
+  - name: field_energy
+    source: diags/reducedfiles/EF.txt
+    metric: '\n\d+\s+\S+\s+([\d.eE+-]+)'
+    reduce: last
+    tolerance: 1.0e-9
+  - name: particle_energy
+    source: diags/reducedfiles/EP.txt
+    metric: '\n\d+\s+\S+\s+([\d.eE+-]+)'
+    reduce: last
+    tolerance: 1.0e-9

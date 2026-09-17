@@ -1,0 +1,33 @@
+# 619.lbm_s (SPEC CPU2017 fpspeed, OpenMP) — self-describing benchmark record.
+# Staged by ./stage.sh: inputs symlinked from the SPEC install, never copied (licensed).
+name: lbm_s
+kind: openmp
+exe: run/exe            # 2022-07-21 build, config memory-ef-uruguay (gcc/gfortran -Ofast -fopenmp)
+
+# 2000 steps, result file reference.dat, action 0 (neither store nor compare), simulation
+# type 0 (lid-driven cavity), obstacle file.
+args: "2000 reference.dat 0 0 200_200_260_ldc.of"
+stdout: lbm.out
+outputs: [reference.dat]
+
+# SPEC prints no timer: the metric is the harness's wall clock around the process
+# (includes vmem client init/teardown under the vmem conditions).
+metric: wall
+lower_is_better: true
+
+# SPEC sets this for every fpspeed run (preENV_OMP_STACKSIZE in the uruguay config);
+# the Fortran codes overflow the default OpenMP thread stack without it.
+env:
+  OMP_STACKSIZE: 128M
+
+# correctness: SPEC's own specdiff against the refspeed reference output, with the
+# exact tolerances from the benchmark's compare.cmd. Pinned to expect 0 (specdiff's
+# exit code), NOT compared to all_dram -- a validator that fails everywhere must not
+# read as agreement.
+validate: >-
+  SPEC=$PWD/spec perl -Ispec/bin/lib -Ispec/bin/common -Ispec/bin/harness spec/bin/harness/specdiff -m -l 10 --abstol 1e-07 spec/benchspec/CPU/619.lbm_s/data/refspeed/output/lbm.out lbm.out
+correctness:
+  - name: specdiff
+    metric: 'VBENCH_VALIDATE_RC=(\d+)'
+    expect: 0
+    tolerance: 0

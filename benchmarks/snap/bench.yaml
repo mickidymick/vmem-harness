@@ -1,0 +1,36 @@
+# SNAP (LANL SN transport proxy, v1.10) — self-describing benchmark record.
+name: snap
+kind: openmp            # mpif90 build run direct as ONE process: npey=npez=1 in the input
+exe: run/exe            # 2024-07-10 build from memory-ef; build.sh rebuilds it from the original tree
+
+# Threads come from `nthreads` in the input, not OMP_NUM_THREADS; these inputs say 16.
+# Inputs live in the bench dir (tracked), args are relative to run/.
+#   small: nx=320 ny=60 nz=46 ng=272 -- 12.9 GiB RSS, the memory-ef "small" size
+#   tiny : nx=80                     -- 4.7 GiB RSS, 95 s native (npey fixed 15 -> 1)
+#   smoke: nx=40 ny=30               -- for the smoke experiment
+# NOTE: SNAP keeps file names in a short Fortran buffer -- absolute paths fail to open.
+args: "../snap_input_small.txt out.txt"
+
+# SNAP writes its whole report to the output file named in args, and exits 0 even
+# when it fails ("Aww SNAP. Program failed."). So metric and correctness are read
+# from out.txt, which the harness deletes before every run: no report, no metric,
+# and the run counts as a crash.
+outputs: [out.txt]
+metric_source: out.txt
+metric: 'Total Execution time\s+([\d.E+-]+)'
+metric_reduce: first
+lower_is_better: true
+
+# correctness: the last outer iteration's max flux change. Deterministic -- two tiny
+# native runs agreed to every printed digit (1.0217E-02 / 5.0215E-03).
+correctness:
+  - name: dfmxo
+    source: out.txt
+    metric: 'Dfmxo=\s*([\d.E+-]+)'
+    reduce: last
+    tolerance: 1.0e-6
+  - name: outers
+    source: out.txt
+    metric: '(\d+)\s+Dfmxo='
+    reduce: last
+    tolerance: 0

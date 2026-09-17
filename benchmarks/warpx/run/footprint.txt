@@ -1,0 +1,3 @@
+# measured peak allocated vpages (vbench measure)
+# args='../warpx_paper.txt'  (24.44 GiB)
+12515

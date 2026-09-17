@@ -1,0 +1,3 @@
+# measured peak allocated vpages (vbench measure)
+# args='-g 27 -n 16 -i 20 -v'  (35.24 GiB)
+18045

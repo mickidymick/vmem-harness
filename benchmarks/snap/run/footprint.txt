@@ -1,0 +1,3 @@
+# measured peak allocated vpages (vbench measure)
+# args='../snap_input_small.txt out.txt'  (27.13 GiB)
+13892

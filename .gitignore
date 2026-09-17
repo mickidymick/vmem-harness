@@ -4,15 +4,14 @@
 # Every run writes a fresh timestamped directory; results are reproduced, not tracked.
 /results/
 
-# Built benchmark binaries and build artifacts — rebuild via benchmarks/*/build.sh.
+# Benchmark source code is NEVER kept here -- it lives in its original trees
+# (~/Projects/benchmarks, ~/projects/memory-ef/benchmarks, the SPEC install), and each
+# bench's build.sh / stage.sh points at it. Run dirs hold binaries, symlinked data and
+# outputs; only the measured footprint.txt is tracked.
+benchmarks/*/src/
+benchmarks/*/.attic/
 benchmarks/*/run/*
 !benchmarks/*/run/footprint.txt
-benchmarks/*/src/*.o
-benchmarks/*/src/*.bc
-benchmarks/*/src/.*.bc
-benchmarks/*/src/lulesh2.0
-benchmarks/*/src/.ccls-cache/
-benchmarks/*/.attic/
 
 # Library/binary snapshots taken before a rebuild.
 *.bak-*
@@ -26,7 +25,3 @@ vpage_llc_misses.out
 __pycache__/
 *.pyc
 
-# benchmarks that build in source subdirectories (AMG/HYPRE)
-benchmarks/*/src/**/*.o
-benchmarks/*/src/**/*.a
-benchmarks/amg/src/test/amg

@@ -1,9 +1,22 @@
 # An experiment = benches x conditions x repeats. This is the whole spine of the
 # next paper's F1/F8 figures. Run it with:  vbench sweep placement-ladder
+# Footprints (peak vpages, 2026-09-17) in comments; ceiling 25206 at pmem_frac 1.3.
 name: placement-ladder
 description: The DRAM->PMEM placement gap and how much vmem demotion recovers.
 benches:
-  - lulesh
+  - lulesh              # 12108
+  - amg                 # 11668  -n 200
+  - snap                # 13892  small input
+  - warpx               # 12515  256x256x3072, 20 steps
+  - qmcpack             # 10050  NiO S64 VMC
+  - bwaves_s            #  5797  SPEC fpspeed refspeed (bwaves_1 only)
+  - roms_s              #  5307
+  - fotonik3d_s         #  4827
+  - cactubssn_s         #  3460
+  - lbm_s               #  1612
+  # gapbs_bfs / gapbs_pr (18045 each) are ported but OUT until the vmem bug is fixed:
+  # random-access apps run ~2000x slower under a constrained DRAM pool (2026-08-27),
+  # so first_touch / vmem_demote would hit the 9000 s timeout.
 conditions:
   - all_dram
   - first_touch

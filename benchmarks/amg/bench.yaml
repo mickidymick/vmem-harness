@@ -1,0 +1,36 @@
+# AMG (CORAL-2, HYPRE BoomerAMG-GMRES) — self-describing benchmark record.
+name: amg
+kind: openmp            # single-process OpenMP — run direct, NO mpirun (it throttles OMP)
+                        # The old phase1.sh ran AMG under mpirun: cpu/wall was ~2, so its
+                        # 516 s all-DRAM solve was a ~2-core number. Never compare to it.
+
+exe: run/exe            # the 2024-07-10 binary Phase-1 used; build.sh rebuilds it from the original tree
+
+# Problem 2 = 27-point Laplacian, AMG-preconditioned GMRES, 6 time steps.
+# Size is set from the measured VMEM footprint (peak allocated vpages), NOT glibc RSS:
+# mimalloc on 2 MB vpages inflates AMG far past its RSS (13.05 GiB at -n 200), which
+# is exactly what exhausted the RSS-sized Phase-1 pools.
+args: "-problem 2 -n 200 200 200"
+
+# metric: the GMRES solve wall-clock. The output prints "wall clock time" for EVERY
+# phase (matrix generation, vector setup, solve), so a bare "wall clock time" regex
+# picks up the 4.9 s generation time when the solve crashes -- that is how Phase-1
+# reported aborted runs as 0.01x of all-DRAM. Anchor on the solve block so a crash
+# yields NO metric and the harness records CRASH.
+metric: 'GMRES Solve:\s*wall clock time = ([\d.]+)'
+metric_reduce: first
+lower_is_better: true
+
+# correctness: two checks against the all_dram run of the same sweep.
+#  - iterations: deterministic (214 in all 6 Phase-1 all-DRAM/all-PMEM runs), so it
+#    must match exactly. A corrupted matrix or vector changes the convergence path.
+#  - residual: OpenMP reductions make it vary ~2% run to run (9.13e-15..9.34e-15),
+#    so a 1e-9 relative tolerance would flag every run. 0.5 still catches a solve
+#    that stalled or converged to a different system (orders of magnitude off).
+correctness:
+  - name: iterations
+    metric: 'Cum\. No\. of Iterations\s*=\s*(\d+)'
+    tolerance: 0
+  - name: residual
+    metric: 'Final Relative Residual Norm\s*=\s*([\d.eE+-]+)'
+    tolerance: 0.5

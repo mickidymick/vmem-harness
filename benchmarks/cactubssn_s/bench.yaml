@@ -1,0 +1,31 @@
+# 607.cactuBSSN_s (SPEC CPU2017 fpspeed, OpenMP) — self-describing benchmark record.
+# Staged by ./stage.sh: inputs symlinked from the SPEC install, never copied (licensed).
+name: cactubssn_s
+kind: openmp
+exe: run/exe            # 2022-07-21 build, config memory-ef-uruguay (gcc/gfortran -Ofast -fopenmp)
+
+args: "spec_ref.par"
+stdout: spec_ref.out
+outputs: [gxx.xl, gxy.xl]
+
+# SPEC prints no timer: the metric is the harness's wall clock around the process
+# (includes vmem client init/teardown under the vmem conditions).
+metric: wall
+lower_is_better: true
+
+# SPEC sets this for every fpspeed run (preENV_OMP_STACKSIZE in the uruguay config);
+# the Fortran codes overflow the default OpenMP thread stack without it.
+env:
+  OMP_STACKSIZE: 128M
+
+# correctness: SPEC's own specdiff against the refspeed reference output, with the
+# exact tolerances from the benchmark's compare.cmd. Pinned to expect 0 (specdiff's
+# exit code), NOT compared to all_dram -- a validator that fails everywhere must not
+# read as agreement.
+validate: >-
+  SPEC=$PWD/spec perl -Ispec/bin/lib -Ispec/bin/common -Ispec/bin/harness spec/bin/harness/specdiff -m -l 10 --abstol 5e-13 --floatcompare spec/benchspec/CPU/507.cactuBSSN_r/data/refspeed/output/gxx.xl gxx.xl && SPEC=$PWD/spec perl -Ispec/bin/lib -Ispec/bin/common -Ispec/bin/harness spec/bin/harness/specdiff -m -l 10 --abstol 5e-13 --floatcompare spec/benchspec/CPU/507.cactuBSSN_r/data/refspeed/output/gxy.xl gxy.xl && SPEC=$PWD/spec perl -Ispec/bin/lib -Ispec/bin/common -Ispec/bin/harness spec/bin/harness/specdiff -m -l 10 --floatcompare spec/benchspec/CPU/507.cactuBSSN_r/data/refspeed/output/spec_ref.out spec_ref.out
+correctness:
+  - name: specdiff
+    metric: 'VBENCH_VALIDATE_RC=(\d+)'
+    expect: 0
+    tolerance: 0

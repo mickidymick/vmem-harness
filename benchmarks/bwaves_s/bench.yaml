@@ -1,0 +1,35 @@
+# 603.bwaves_s (SPEC CPU2017 fpspeed, OpenMP) — self-describing benchmark record.
+# Staged by ./stage.sh: inputs symlinked from the SPEC install, never copied (licensed).
+name: bwaves_s
+kind: openmp
+exe: run/exe            # 2022-07-21 build, config memory-ef-uruguay (gcc/gfortran -Ofast -fopenmp)
+
+# SPEC's refspeed runs TWO workloads (bwaves_1, bwaves_2) as separate processes. vbench
+# runs bwaves_1 only: one process = one vmem context, one footprint, one timing.
+# bwaves_2 (120x120x248 vs 108x131x251) is the same code on a near-identical grid.
+args: "bwaves_1"
+stdin: bwaves_1.in
+stdout: bwaves_1.out
+outputs: [refspeed1_resid.log, refspeed1_dqnrm.log]
+
+# SPEC prints no timer: the metric is the harness's wall clock around the process
+# (includes vmem client init/teardown under the vmem conditions).
+metric: wall
+lower_is_better: true
+
+# SPEC sets this for every fpspeed run (preENV_OMP_STACKSIZE in the uruguay config);
+# the Fortran codes overflow the default OpenMP thread stack without it.
+env:
+  OMP_STACKSIZE: 128M
+
+# correctness: SPEC's own specdiff against the refspeed reference output, with the
+# exact tolerances from the benchmark's compare.cmd. Pinned to expect 0 (specdiff's
+# exit code), NOT compared to all_dram -- a validator that fails everywhere must not
+# read as agreement.
+validate: >-
+  SPEC=$PWD/spec perl -Ispec/bin/lib -Ispec/bin/common -Ispec/bin/harness spec/bin/harness/specdiff -m -l 10 --abstol 1e-16 --reltol 0.015 spec/benchspec/CPU/503.bwaves_r/data/refspeed/output/bwaves_1.out bwaves_1.out
+correctness:
+  - name: specdiff
+    metric: 'VBENCH_VALIDATE_RC=(\d+)'
+    expect: 0
+    tolerance: 0

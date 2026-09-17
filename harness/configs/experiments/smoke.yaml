@@ -1,17 +1,32 @@
-# The plumbing check, not a result. Same four conditions as the real ladder, on a
-# ~0.9 GB LULESH input, one repeat: it proves the native path, the vmem path, pool
-# sizing, the server lifecycle, the metric regex and the summary all work end to end
-# in minutes instead of a day. Run this before every long sweep.
+# The plumbing check, not a result. Same four conditions as the real ladder, on
+# small inputs, one repeat: it proves the native path, the vmem path, pool sizing,
+# the server lifecycle, the metric regexes, output capture, validation and the
+# summary all work end to end for every KIND of benchmark record. Run it before
+# every long sweep.
 #
 #   vbench sweep smoke
 #
-# footprint_vpages came from `vbench measure lulesh -a "<the args below>"` = 462
-# (0.90 GiB) on 2026-09-02 -- NOT from the paper-scale footprint.txt, which would
-# size the pools ~26x too large and make the smoke test nothing at all.
+# footprint_vpages come from `vbench measure <bench> -a "<the args below>"` -- NOT
+# from the paper-scale footprint.txt, which would size the pools many times too
+# large and make the smoke test nothing at all.
+#   lulesh   462 (2026-09-02)  regex metric, deterministic correctness
+#   amg     1259 (2026-09-17)  two correctness checks, residual tolerance
+#   snap     759 (2026-09-17)  report in an output file, exits 0 on failure
+#   warpx    138 (2026-09-17)  correctness from reduced-diag files in a subdirectory
+#   qmcpack 8599 (2026-09-17)  statistical correctness, symlinked data
+#   lbm_s   1612               SPEC path: wall metric, stdout file, specdiff validate.
+#                              SPEC's `test` workload (20 steps) on the same 200x200x260
+#                              grid as refspeed, so the footprint is refspeed's measured one.
+# gapbs_* are left out until the constrained-pool vmem bug is fixed.
 name: smoke
-description: End-to-end plumbing check on a small LULESH input.
+description: End-to-end plumbing check on small inputs, one per kind of benchmark record.
 benches:
   - lulesh
+  - amg
+  - snap
+  - warpx
+  - qmcpack
+  - lbm_s
 conditions:
   - all_dram
   - first_touch
@@ -22,3 +37,22 @@ overrides:
   lulesh:
     args: "-s 100 -i 10 -r 11 -b 0 -c 64 -p"
     footprint_vpages: 462
+  amg:
+    args: "-problem 2 -n 100 100 100"
+    footprint_vpages: 1259
+  snap:
+    args: "../snap_input_smoke.txt out.txt"
+    footprint_vpages: 759
+  warpx:
+    args: "../warpx_smoke.txt"
+    footprint_vpages: 138
+  qmcpack:
+    args: "qmcpack_smoke.xml"
+    footprint_vpages: 8599
+  lbm_s:
+    args: "20 reference.dat 0 1 200_200_260_ldc.of"
+    footprint_vpages: 1612
+    validate: >-
+      SPEC=$PWD/spec perl -Ispec/bin/lib -Ispec/bin/common -Ispec/bin/harness
+      spec/bin/harness/specdiff -m -l 10 --abstol 1e-07
+      spec/benchspec/CPU/619.lbm_s/data/test/output/lbm.out lbm.out

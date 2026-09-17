@@ -1,0 +1,3 @@
+# measured peak allocated vpages (vbench measure)
+# args='spec_ref.par'  (6.76 GiB)
+3460

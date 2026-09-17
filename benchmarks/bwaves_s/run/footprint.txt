@@ -1,0 +1,3 @@
+# measured peak allocated vpages (vbench measure)
+# args='bwaves_1'  (11.32 GiB)
+5797

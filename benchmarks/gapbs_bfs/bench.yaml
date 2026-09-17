@@ -1,0 +1,27 @@
+# GAPBS breadth-first search — self-describing benchmark record.
+name: gapbs_bfs
+kind: openmp            # plain g++ -fopenmp, not MPI-linked
+exe: run/exe            # ~/Projects/benchmarks/gapbs `make bfs` (2024-07-23 build of b5e3e19)
+
+# Kronecker graph, 2^27 vertices, degree 16 (~16.5 GB RSS), 16 BFS trials from
+# GAPBS's fixed-seed source picker. -v verifies every trial.
+# KNOWN VMEM BUG (2026-08-27): random-access apps run ~2000x slower under a
+# CONSTRAINED DRAM pool (first_touch never finished at 25%). Measuring the footprint
+# is unaffected (oversized pools); keep GAPBS out of smoke/ladder until it is fixed.
+args: "-g 27 -n 16 -v"
+
+# stdout goes to a file so `validate` can check it; graph generation is excluded
+# from the metric (GAPBS's per-trial average).
+stdout: gapbs.out
+metric_source: gapbs.out
+metric: 'Average Time:\s+([\d.]+)'
+lower_is_better: true
+
+validate: >-
+  test "$(grep -c 'Verification:\s*PASS' gapbs.out)" -eq 16 &&
+  ! grep -q 'Verification:\s*FAIL' gapbs.out
+correctness:
+  - name: verified
+    metric: 'VBENCH_VALIDATE_RC=(\d+)'
+    expect: 0
+    tolerance: 0
