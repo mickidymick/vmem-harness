@@ -5,7 +5,8 @@
 /results/
 
 # Built benchmark binaries and build artifacts — rebuild via benchmarks/*/build.sh.
-benchmarks/*/run/exe
+benchmarks/*/run/*
+!benchmarks/*/run/footprint.txt
 benchmarks/*/src/*.o
 benchmarks/*/src/*.bc
 benchmarks/*/src/.*.bc
@@ -24,3 +25,8 @@ vpage_llc_misses.out
 
 __pycache__/
 *.pyc
+
+# benchmarks that build in source subdirectories (AMG/HYPRE)
+benchmarks/*/src/**/*.o
+benchmarks/*/src/**/*.a
+benchmarks/amg/src/test/amg

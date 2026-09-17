@@ -62,7 +62,7 @@ def _run_dir(label):
 # tiering counters are the proof the condition did what it says, and the correctness
 # value is the proof the answer survived it. Column 4 stays the metric so the file is
 # still readable by eye. Missing values are '-' (native conditions have no counters).
-_COLUMNS = ["bench", "condition", "repeat", "metric", "correctness_value",
+_COLUMNS = ["bench", "condition", "repeat", "metric", "correctness", "rc",
             "dram_vpages", "pmem_vpages", "replicas", "invalidated",
             "candidates", "evictions", "promos", "stats_contexts"]
 
@@ -76,6 +76,8 @@ def _append_tsv(out, rec):
         v = rec.get(c)
         if c == "metric" and v is None:
             v = "CRASH"
+        if c == "correctness":          # one cell, "name=value;name=value"
+            v = ";".join(f"{k}={x}" for k, x in v.items()) if v else None
         vals.append("-" if v is None else str(v))
     with open(path, "a") as f:
         f.write("\t".join(vals) + "\n")
@@ -92,8 +94,17 @@ def _fmt(rec):
     return f"  {rec['tag']:<32} {v:>12}{extra}"
 
 
+def _snapshot_bench(out, name):
+    """Save the bench.yaml and measured footprint a run used: the correctness
+    tolerances and the pool sizes are both derived from them."""
+    d = config.BENCH_DIR / name
+    shutil.copy(d / "bench.yaml", out / f"bench-{name}.yaml")
+    if (d / "run" / "footprint.txt").exists():
+        shutil.copy(d / "run" / "footprint.txt", out / f"footprint-{name}.txt")
+
+
 def _finish(out, recs):
-    summary = collect.summarize(collect.load(out / "results.tsv"))
+    summary = collect.summarize(collect.load(out / "results.tsv"), run_dir=out)
     (out / "SUMMARY.txt").write_text(summary + "\n")
     print(summary)
     print(f"\n-> {out}")
@@ -119,6 +130,7 @@ def cmd_run(args):
     if args.condition not in conds:
         raise SystemExit(f"unknown condition '{args.condition}' (have: {', '.join(conds)})")
     out = _run_dir(f"run-{args.bench}-{args.condition}")
+    _snapshot_bench(out, args.bench)
     server = Server(m)
     recs = []
     for r in range(1, args.repeats + 1):
@@ -138,6 +150,8 @@ def cmd_sweep(args):
     for f in ("conditions.yaml", "knobs.yaml", "machine.yaml"):
         shutil.copy(config.CONFIGS / f, out / f)
     shutil.copy(config.CONFIGS / "experiments" / f"{args.experiment}.yaml", out / "experiment.yaml")
+    for bench in exp["benches"]:
+        _snapshot_bench(out, bench)
     repeats = args.repeats or exp.get("repeats", 3)
     # Per-bench overrides let one experiment run a cheap variant of a benchmark: a
     # smoke input needs both its own args AND its own footprint, or the pools get
@@ -150,8 +164,7 @@ def cmd_sweep(args):
         for cond_name in exp["conditions"]:
             for r in range(1, repeats + 1):
                 rec = run_one(bench, cond_name, conds[cond_name], r, m, kb, server, out,
-                              args_override=ov.get("args"),
-                              footprint_override=ov.get("footprint_vpages"))
+                              overrides=ov)
                 recs.append(rec)
                 _append_tsv(out, rec)
                 print(_fmt(rec))
@@ -162,7 +175,7 @@ def cmd_collect(args):
     tsv = config.RESULTS_DIR / args.run_id / "results.tsv"
     if not tsv.exists():
         raise SystemExit(f"no results.tsv in {tsv.parent}")
-    print(collect.summarize(collect.load(tsv)))
+    print(collect.summarize(collect.load(tsv), run_dir=tsv.parent))
 
 
 def main(argv=None):

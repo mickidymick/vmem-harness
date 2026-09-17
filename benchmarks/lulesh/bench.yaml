@@ -31,5 +31,7 @@ lower_is_better: true
 # the pattern must be \s*=\s* -- a literal '= ' silently never matches and the
 # correctness check quietly reports nothing at all.
 correctness:
+  name: energy
   metric: 'Final Origin Energy\s*=\s*([\d.eE+-]+)'
+  tolerance: 1.0e-9     # deterministic: every Sep-2 condition matched to 0.00e+00
   reference: null

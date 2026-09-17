@@ -10,6 +10,8 @@ visible here without anyone remembering to go and look at the .stats files.
 """
 import statistics as st
 
+from . import config
+
 ORDER = ["all_dram", "vmem_dram", "first_touch", "profile_only",
          "vmem_demote", "demote_promote", "vmem_pmem", "all_pmem"]
 
@@ -122,31 +124,68 @@ def _evidence(conds, order):
             if any_vmem else [])
 
 
-def _correctness(conds, order, tol=1e-9):
-    ref = next((v for v in (_f(r.get("correctness_value"))
-                            for r in conds.get("all_dram", [])) if v is not None), None)
-    if ref is None:
+def _checked(row, names):
+    """{check name: value} for one row. Rows carry "name=value;name=value"; rows from
+    before multi-check support carry one bare float in `correctness_value`, which
+    belongs to the bench's first (only) check."""
+    raw = row.get("correctness", row.get("correctness_value"))
+    if raw in (None, "", "-"):
+        return {}
+    if "=" not in raw:
+        v = _f(raw)
+        return {names[0] if names else "value": v} if v is not None else {}
+    out = {}
+    for part in raw.split(";"):
+        k, _, v = part.partition("=")
+        if _f(v) is not None:
+            out[k] = _f(v)
+    return out
+
+
+def _correctness(conds, order, checks):
+    names = [c["name"] for c in checks]
+    tol = {c["name"]: c["tolerance"] for c in checks}
+    dram = next((d for d in (_checked(r, names) for r in conds.get("all_dram", [])) if d), {})
+    # Reference per check: a pinned `expect`, else the all_dram run's value.
+    ref = {c["name"]: c["expect"] for c in checks if c.get("expect") is not None}
+    ref.update({n: v for n, v in dram.items() if n not in ref})
+    if not ref:
         return []
-    lines = [f"  correctness (reference = all_dram {ref:.8e}, tol {tol:g}):"]
+    src = {n: ("expect" if any(c["name"] == n and c.get("expect") is not None for c in checks)
+               else "all_dram") for n in ref}
+    lines = ["  correctness (max relative diff from reference, per check):",
+             "    reference        " + "  ".join(
+                 f"{n} {v:.8g} [{src[n]}, tol {tol.get(n, 1e-9):g}]" for n, v in ref.items())]
     for c in order:
-        vals = [v for v in (_f(r.get("correctness_value")) for r in conds[c]) if v is not None]
-        if not vals:
-            lines.append(f"    {c:<16} NO VALUE — the benchmark printed no correctness figure")
+        if all(r.get("metric") == "CRASH" for r in conds[c]):
+            lines.append(f"    {c:<16} no value — every run crashed (see timings)")
             continue
-        worst = max(abs(v - ref) / abs(ref) for v in vals)
-        lines.append(f"    {c:<16} max rel diff {worst:.2e}   "
-                     f"{'ok' if worst <= tol else '*** MISMATCH ***'}")
+        rows = [_checked(r, names) for r in conds[c]]
+        parts, bad = [], False
+        for n, rv in ref.items():
+            vals = [d[n] for d in rows if n in d]
+            if not vals:
+                parts.append(f"{n} NO VALUE")
+                bad = True
+                continue
+            worst = max(abs(v - rv) / abs(rv) if rv else abs(v) for v in vals)
+            ok = worst <= tol.get(n, 1e-9)
+            bad = bad or not ok
+            parts.append(f"{n} {worst:.2e}{'' if ok else ' (over tol)'}")
+        verdict = "*** MISMATCH ***" if bad else "ok"
+        lines.append(f"    {c:<16} " + "  ".join(parts) + f"   {verdict}")
     return lines
 
 
-def summarize(data):
+def summarize(data, run_dir=None):
     out = []
     for bench, conds in data.items():
         order = [c for c in ORDER if c in conds] + [c for c in conds if c not in ORDER]
+        checks = config.correctness_checks(config.bench_spec(bench, run_dir))
         out.append(f"\n{bench}")
         lines, base, means = _timings(conds, order)
         out += lines
         out += _capture(means, base)
         out += _evidence(conds, order)
-        out += _correctness(conds, order)
+        out += _correctness(conds, order, checks)
     return "\n".join(out)

@@ -54,6 +54,46 @@ def bench(name):
     return b
 
 
+def bench_spec(name, run_dir=None):
+    """The raw bench.yaml, preferring the snapshot a run saved of it -- so re-collecting
+    an old run judges it by the tolerances it ran with, not today's file. None if
+    neither exists."""
+    if run_dir is not None:
+        snap = Path(run_dir) / f"bench-{name}.yaml"
+        if snap.exists():
+            return _load(snap)
+    path = BENCH_DIR / name / "bench.yaml"
+    return _load(path) if path.exists() else None
+
+
+def correctness_checks(spec):
+    """A bench's correctness checks as a list of {name, metric, tolerance, expect}.
+
+    bench.yaml may give one mapping (the original form) or a list. Tolerance is the
+    max relative difference from the reference; it defaults to 1e-9, which only
+    suits deterministic outputs -- a solver residual that varies with OpenMP
+    reduction order needs its own. The reference is the all_dram run of the same
+    sweep, unless the check pins `expect` (e.g. a validator's exit code, where
+    all_dram failing too must not count as agreement)."""
+    c = (spec or {}).get("correctness")
+    if not c:
+        return []
+    items = c if isinstance(c, list) else [c]
+    checks = []
+    for i, item in enumerate(items):
+        if not item.get("metric"):
+            continue
+        default = "value" if len(items) == 1 else f"check{i + 1}"
+        checks.append({"name": item.get("name") or default,
+                       "metric": item["metric"],
+                       "tolerance": float(item.get("tolerance", 1e-9)),
+                       "source": item.get("source"),
+                       "reduce": item.get("reduce", "first"),
+                       "expect": (float(item["expect"]) if item.get("expect") is not None
+                                  else None)})
+    return checks
+
+
 # Measured footprint is DERIVED data, not config — it lives in a generated file so
 # the hand-written, commented bench.yaml is never rewritten. `vbench measure` writes
 # it; the runner reads it to size pools.
