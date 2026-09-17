@@ -25,23 +25,17 @@ outputs:
   - NiO-fcc-S64-dmc.s001.cont.xml
   - NiO-fcc-S64-dmc.info.xml
 
-# correctness: the VMC block's LocalEnergy. OPEN QUESTION, not settled noise:
-#  - NATIVE runs are deterministic: smoke all_dram and all_pmem gave bit-identical
-#    -22239.373056 (2026-09-17).
-#  - Runs under the vmem substrate SOMETIMES differ from native, EVEN WITH TIERING
-#    OFF: smoke first_touch -22231.940 (3.3e-4 rel) once, then bit-identical to native
-#    in two repeats (repro run 20260917-124406); paper-size measure -23727.789 vs native
-#    -23730.909 (1.3e-4 rel). Native never varied. Intermittent => nondeterminism or
-#    silent corruption introduced by the substrate (allocator or vmem).
-#  The shift is ~0.5 sigma of the VMC statistics, which fits an allocator-dependent
-#  code path (mimalloc vs glibc: different addresses/alignment changing an OpenMP
-#  reduction or iteration order) but does not rule out silent corruption. Tolerance
-#  1e-3 (~4 sigma) lets vmem conditions pass while this is unresolved. It catches a
-#  broken wavefunction, not a subtle one. Check native + stock-mimalloc LD_PRELOAD to
-#  separate allocator from vmem.
+# correctness: the VMC block's LocalEnergy. Native QMCPACK is bit-deterministic at a
+# fixed thread count, glibc and stock mimalloc alike (qmcpack-allocator sweep
+# 2026-09-17: all_dram, mimalloc_dram and vmem first_touch 3/3 each = -22239.373056).
+# The allocator is ruled out. But the vmem substrate with tiering OFF drifted twice
+# (smoke first_touch -22231.940; paper-size measure 1.3e-4 off native), both runs on a
+# LOADED box, while 6 quiet-box vmem runs matched exactly -- a timing-dependent race is
+# the live hypothesis. A drifted value is a real correctness failure, so the tolerance is
+# tight again: any vmem run that differs from all_dram fails loudly.
 correctness:
   - name: local_energy
     source: NiO-fcc-S64-dmc.s001.scalar.dat
     metric: '\n\s*0\s+([\d.eE+-]+)'
     reduce: last
-    tolerance: 1.0e-3
+    tolerance: 1.0e-9

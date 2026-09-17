@@ -12,7 +12,7 @@ import statistics as st
 
 from . import config
 
-ORDER = ["all_dram", "vmem_dram", "first_touch", "profile_only",
+ORDER = ["all_dram", "mimalloc_dram", "vmem_dram", "first_touch", "profile_only",
          "vmem_demote", "demote_promote", "vmem_pmem", "all_pmem"]
 
 # Two-sided 95% t multipliers by degrees of freedom. At the n=3..5 these sweeps run,

@@ -15,6 +15,13 @@ all_pmem:                    # worst case
   kind: native
   node: 1
 
+mimalloc_dram:               # all_dram + stock mimalloc preloaded: the allocator alone,
+  kind: native               # no vmem. Separates "mimalloc changes the app" from "vmem does".
+  node: 0
+  preload: stock_mimalloc    # key into machine.yaml native_libs
+  env:
+    MIMALLOC_VERBOSE: 1      # proof in the log that the preload actually took
+
 first_touch:                 # DRAM-first + spill, tiering OFF — the naive baseline
   kind: vmem
   dram_frac: 0.25

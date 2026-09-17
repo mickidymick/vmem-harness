@@ -14,6 +14,7 @@ import shlex
 import shutil
 import subprocess
 import time
+from pathlib import Path
 from . import config
 from .footprint import contexts
 
@@ -175,6 +176,12 @@ def run_one(bench, cond_name, cond, repeat, machine, knobs, server, out_dir,
 
     if cond["kind"] == "native":
         env = dict(os.environ, OMP_NUM_THREADS=str(threads), **bench_env(b))
+        env.update({k: str(v) for k, v in (cond.get("env") or {}).items()})
+        if cond.get("preload"):
+            lib = Path(os.path.expanduser(machine["native_libs"][cond["preload"]]))
+            if not lib.exists():
+                raise FileNotFoundError(f"{cond_name}: preload {lib} does not exist")
+            env["LD_PRELOAD"] = str(lib)
         cmd = ["numactl", f"--membind={cond['node']}", str(b["exe"])] + args
         wall, rc = _run(cmd, b["run_dir"], log, env=env,
                         stdin_path=stdin_path, stdout_path=stdout_path)

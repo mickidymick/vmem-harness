@@ -1,0 +1,15 @@
+# Is QMCPACK's intermittent result drift under vmem (tiering OFF) caused by the
+# allocator or by vmem? Native glibc was bit-identical every time; vmem first_touch
+# differed 1 of 3 smoke runs (2026-09-17). Three repeats each:
+#   all_dram       native glibc                    -- is native really deterministic?
+#   mimalloc_dram  native + stock mimalloc v2.2.6  -- does the allocator alone move it?
+#   first_touch    vmem substrate, tiering off     -- how often does vmem move it?
+name: qmcpack-allocator
+description: Separate allocator effects from vmem effects on QMCPACK's LocalEnergy.
+benches: [qmcpack]
+conditions: [all_dram, mimalloc_dram, first_touch]
+repeats: 3
+overrides:
+  qmcpack:
+    args: "qmcpack_smoke.xml"
+    footprint_vpages: 8599
