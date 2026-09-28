@@ -1,0 +1,12 @@
+# Is the qmcpack demotion crash the AMG corruption class -- a stale replica installed
+# by the no-copy demotion swap? VMEM_VERIFY_FLIP memcmps source vs replica at every
+# flip; any STALE line in the run's .vmem.log means a write escaped uffd write-protect.
+name: qmcpack-verify
+description: Stale-replica check on the qmcpack demotion crash.
+benches: [qmcpack]
+conditions: [base_demote_verify]
+repeats: 2
+overrides:
+  qmcpack:
+    args: "qmcpack_smoke.xml"
+    footprint_vpages: 8599

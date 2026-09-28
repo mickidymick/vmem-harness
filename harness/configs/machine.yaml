@@ -30,6 +30,11 @@ server_flags: "-H 21 -V 21 -D 35 -P 35"   # -D/-P overridden per-run by VMEM_*_P
 libs:
   base:    lib/libmimalloc-vmem.so             # mimalloc bridge, no profiler
   profile: lib/libmimalloc-vmem-llc-profile.so # + LLC miss profiler (tiering needs it)
+  debug:   lib/libmimalloc-vmem-debug.so       # DIAGNOSTIC ONLY: mimalloc Debug build with
+                                               # MI_DEBUG_FULL=ON -- its own heap-integrity
+                                               # assertions, to catch corruption at the source.
+                                               # Built by hand into mimalloc/out/vmem_debug;
+                                               # `make` does not produce it. Slow.
 # Stock upstream mimalloc at the version the vmem fork is based on (v2.2.6, 048d969),
 # built Release, MI_OVERRIDE=ON, no vmem bridge -- the "allocator only" control. Lives
 # outside both repos: ~/Projects/benchmarks/mimalloc-v2.2.6/out/release.

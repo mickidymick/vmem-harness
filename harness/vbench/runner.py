@@ -12,6 +12,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -69,11 +70,24 @@ def _run(cmd, cwd, log_path, env=None, timeout=9000, stdin_path=None, stdout_pat
         stdin = open(stdin_path) if stdin_path else subprocess.DEVNULL
         stdout = open(stdout_path, "w") if stdout_path else log
         try:
+            # Own process group: the benchmark is a GRANDCHILD (timeout -> sudo -> app).
+            # If anything kills the middle of that chain, the app is reparented to init
+            # and keeps running -- still holding vmem pool pages, so every later run
+            # starts short of memory. Killing the group on the way out prevents that.
             t0 = time.monotonic()
-            rc = subprocess.run(full, cwd=str(cwd), env=env, stdout=stdout,
-                                stderr=log if stdout_path else subprocess.STDOUT,
-                                stdin=stdin).returncode
-            wall = time.monotonic() - t0
+            proc = subprocess.Popen(full, cwd=str(cwd), env=env, stdout=stdout,
+                                    stderr=log if stdout_path else subprocess.STDOUT,
+                                    stdin=stdin, start_new_session=True)
+            try:
+                rc = proc.wait()
+            finally:
+                wall = time.monotonic() - t0
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)   # no-op when nothing is left
+                except (ProcessLookupError, PermissionError):
+                    pass
+                subprocess.run(["sudo", "pkill", "-9", "-g", str(proc.pid)],
+                               stderr=subprocess.DEVNULL)   # app runs as root
         finally:
             if stdin_path:
                 stdin.close()
@@ -203,6 +217,7 @@ def run_one(bench, cond_name, cond, repeat, machine, knobs, server, out_dir,
                f"VMEM_DEBUG_FILE={out_dir / f'{tag}.vmem.log'}"]
         cmd += [f"{k}={v}" for k, v in knob_env.items()]
         cmd += [f"{k}={v}" for k, v in bench_env(b).items()]
+        cmd += [f"{k}={v}" for k, v in (cond.get("env") or {}).items()]
         cmd += [str(b["exe"])] + args
         try:
             wall, rc = _run(cmd, b["run_dir"], log,

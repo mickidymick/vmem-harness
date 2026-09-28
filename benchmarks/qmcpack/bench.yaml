@@ -25,17 +25,17 @@ outputs:
   - NiO-fcc-S64-dmc.s001.cont.xml
   - NiO-fcc-S64-dmc.info.xml
 
-# correctness: the VMC block's LocalEnergy. Native QMCPACK is bit-deterministic at a
-# fixed thread count, glibc and stock mimalloc alike (qmcpack-allocator sweep
-# 2026-09-17: all_dram, mimalloc_dram and vmem first_touch 3/3 each = -22239.373056).
-# The allocator is ruled out. But the vmem substrate with tiering OFF drifted twice
-# (smoke first_touch -22231.940; paper-size measure 1.3e-4 off native), both runs on a
-# LOADED box, while 6 quiet-box vmem runs matched exactly -- a timing-dependent race is
-# the live hypothesis. A drifted value is a real correctness failure, so the tolerance is
-# tight again: any vmem run that differs from all_dram fails loudly.
+# correctness: the VMC block's LocalEnergy. QMCPACK IS BIMODAL AT THIS INPUT, natively:
+# across 12 runs on 2026-09-28 it returned exactly -22239.373056 (10x) or -22231.939927
+# (2x) and nothing else -- and one of the odd ones was a NATIVE all_dram run, with no
+# vmem involved. 7.4 Ha on 22239 (3.3e-4) is well inside the VMC statistics (variance
+# ~1266 over 32 walkers => ~6 Ha standard error), so both are valid samples; the earlier
+# suspicion that the vmem substrate perturbed the answer was a sampling artifact.
+# Tolerance 1e-3 (~4 sigma) accepts both modes and still catches a broken wavefunction.
+# A tighter check needs a longer input whose energy is converged, not this smoke run.
 correctness:
   - name: local_energy
     source: NiO-fcc-S64-dmc.s001.scalar.dat
     metric: '\n\s*0\s+([\d.eE+-]+)'
     reduce: last
-    tolerance: 1.0e-9
+    tolerance: 1.0e-3

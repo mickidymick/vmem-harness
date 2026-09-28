@@ -1,0 +1,12 @@
+# Confirm the free_spare_page fix: base_demote and vmem_demote crashed 4/4 before it
+# (stale replica pages recycled as "fresh" zeroed memory corrupted mimalloc's heap).
+# all_dram is here so the summary checks each condition's energy against it.
+name: qmcpack-fix
+description: Post-fix confirmation for the qmcpack demotion crash.
+benches: [qmcpack]
+conditions: [all_dram, first_touch, base_demote, vmem_demote]
+repeats: 3
+overrides:
+  qmcpack:
+    args: "qmcpack_smoke.xml"
+    footprint_vpages: 8599

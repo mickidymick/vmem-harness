@@ -1,0 +1,12 @@
+# Replication (write-protect + copy) or eviction (the no-copy mapping flip)? The
+# stale-replica detector cleared the flip (2432 flips, 0 stale, still crashed), so
+# split migration's two halves: this runs replication with no DRAM pressure at all.
+name: qmcpack-split
+description: Replication without eviction on qmcpack.
+benches: [qmcpack]
+conditions: [repl_nopressure]
+repeats: 2
+overrides:
+  qmcpack:
+    args: "qmcpack_smoke.xml"
+    footprint_vpages: 8599

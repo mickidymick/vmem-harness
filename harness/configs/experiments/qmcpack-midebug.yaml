@@ -1,0 +1,13 @@
+# vmem's own detectors came back clean (2304 flips, 0 stale replicas; 0 page-accounting
+# errors) yet demotion still SIGSEGVs inside mimalloc. Run the same config against a
+# mimalloc built with full internal checks so the allocator reports which invariant
+# broke, and where, instead of faulting later in an unrelated place.
+name: qmcpack-midebug
+description: Reproduce the qmcpack demotion crash under a debug mimalloc.
+benches: [qmcpack]
+conditions: [base_demote_midebug_nopurge]
+repeats: 1
+overrides:
+  qmcpack:
+    args: "qmcpack_smoke.xml"
+    footprint_vpages: 8599

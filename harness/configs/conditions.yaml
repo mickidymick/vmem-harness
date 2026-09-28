@@ -27,7 +27,7 @@ first_touch:                 # DRAM-first + spill, tiering OFF — the naive bas
   dram_frac: 0.25
   pmem_frac: 1.30
   lib: base
-  knobs: off
+  knobs: "off"
 
 vmem_demote:                 # the headline: tuned demotion at 25% DRAM
   kind: vmem
@@ -35,3 +35,64 @@ vmem_demote:                 # the headline: tuned demotion at 25% DRAM
   pmem_frac: 1.30
   lib: profile
   knobs: l27_020
+
+# --- diagnostic conditions (not ladder bars) -------------------------------------
+# vmem_demote changes TWO things at once vs first_touch: the profiler library and
+# migration. These split them, to find which one the qmcpack SIGSEGV needs.
+
+profile_only:                # profiler lib, tiering OFF — the profiler's cost alone
+  kind: vmem                 # (also the control the ladder is missing)
+  dram_frac: 0.25
+  pmem_frac: 1.30
+  lib: profile
+  knobs: "off"
+
+base_demote:                 # migration ON without the profiler lib (hotness falls
+  kind: vmem                 # back to the base build's metric)
+  dram_frac: 0.25
+  pmem_frac: 1.30
+  lib: base
+  knobs: l27_020
+
+base_demote_verify:          # base_demote + the runtime's stale-replica detector:
+  kind: vmem                 # compares each page against its replica at the demotion
+  dram_frac: 0.25            # flip, where a mismatch means a write escaped uffd-WP
+  pmem_frac: 1.30
+  lib: base
+  knobs: l27_020
+  env:
+    VMEM_VERIFY_FLIP: 1
+    VMEM_CHECK_PAGES: 1      # every vpage is free or owned by exactly one vpte
+
+repl_nopressure:             # replication ON but DRAM big enough for the whole app:
+  kind: vmem                 # replicas get created (WP + copy) and nothing is ever
+  dram_frac: 1.10            # evicted, so a crash here is replication, not the flip
+  pmem_frac: 1.30
+  lib: base
+  knobs: l27_020
+
+base_demote_midebug:         # base_demote with the mimalloc DEBUG build: let the
+  kind: vmem                 # allocator's own assertions say what vmem corrupted
+  dram_frac: 0.25
+  pmem_frac: 1.30
+  lib: debug
+  knobs: l27_020
+
+base_demote_nopurge:         # base_demote with mimalloc's purge (decommit) DISABLED.
+  kind: vmem                 # mimalloc purges with MADV_DONTNEED, which the kernel
+  dram_frac: 0.25            # REFUSES (EINVAL) on vmem's 2 MB hugetlb shared mappings;
+  pmem_frac: 1.30            # release builds ignore the error and then treat the
+  lib: base                  # still-populated memory as freshly zeroed.
+  knobs: l27_020
+  env:
+    MIMALLOC_PURGE_DELAY: -1
+
+base_demote_midebug_nopurge: # debug mimalloc + purge disabled: verifies the purge
+  kind: vmem                 # option actually took (no "cannot decommit" warnings)
+  dram_frac: 0.25            # and surfaces whatever assertion fires next
+  pmem_frac: 1.30
+  lib: debug
+  knobs: l27_020
+  env:
+    MIMALLOC_PURGE_DELAY: -1
+    MIMALLOC_VERBOSE: 1

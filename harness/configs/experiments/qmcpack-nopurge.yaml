@@ -1,0 +1,11 @@
+# Confirm the decommit diagnosis: if mimalloc's failing MADV_DONTNEED purge is what
+# corrupts the heap, disabling purging should make the demotion crash disappear.
+name: qmcpack-nopurge
+description: qmcpack under demotion with mimalloc purging disabled.
+benches: [qmcpack]
+conditions: [base_demote_nopurge]
+repeats: 3
+overrides:
+  qmcpack:
+    args: "qmcpack_smoke.xml"
+    footprint_vpages: 8599

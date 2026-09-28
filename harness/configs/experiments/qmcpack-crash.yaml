@@ -1,0 +1,15 @@
+# Which half of vmem_demote does the qmcpack SIGSEGV need: the profiler library, or
+# migration? (2026-09-17: vmem_demote 3/3 crash, first_touch 3/3 clean, same pools.)
+#   first_touch   base lib,    tiering off  -> known clean
+#   profile_only  profile lib, tiering off  -> profiler alone
+#   base_demote   base lib,    tiering on   -> migration alone
+#   vmem_demote   profile lib, tiering on   -> known crash
+name: qmcpack-crash
+description: Split the qmcpack demotion crash into profiler vs migration.
+benches: [qmcpack]
+conditions: [first_touch, profile_only, base_demote, vmem_demote]
+repeats: 2
+overrides:
+  qmcpack:
+    args: "qmcpack_smoke.xml"
+    footprint_vpages: 8599
