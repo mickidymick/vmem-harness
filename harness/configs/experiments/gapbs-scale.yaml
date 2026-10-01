@@ -1,0 +1,8 @@
+# The 2026-08-27 GAPBS pathology does NOT reproduce at -g 23 any more (0.054 s at
+# 25% DRAM, 1.9x native, verified). Does it appear at the paper-scale graph?
+# -g 27 = 18045 vpages; 25% DRAM = 4511 vpages / 23459 PMEM. 40-minute cap.
+name: gapbs-scale
+description: Paper-scale GAPBS under 25% DRAM, tiering off, vs native.
+benches: [gapbs_bfs]
+conditions: [all_dram, ft_25]
+repeats: 1

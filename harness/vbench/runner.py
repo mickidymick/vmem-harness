@@ -185,6 +185,8 @@ def run_one(bench, cond_name, cond, repeat, machine, knobs, server, out_dir,
     args = shlex.split(args_override or b["args"])
 
     rec = {"bench": name, "condition": cond_name, "repeat": repeat, "tag": tag}
+    # A diagnostic should give up in minutes, not burn the 2.5 h default on a hang.
+    tmo = cond.get("timeout_s") or b.get("timeout_s") or 9000
 
     stdin_path, stdout_path = prepare_outputs(b)
 
@@ -197,7 +199,7 @@ def run_one(bench, cond_name, cond, repeat, machine, knobs, server, out_dir,
                 raise FileNotFoundError(f"{cond_name}: preload {lib} does not exist")
             env["LD_PRELOAD"] = str(lib)
         cmd = ["numactl", f"--membind={cond['node']}", str(b["exe"])] + args
-        wall, rc = _run(cmd, b["run_dir"], log, env=env,
+        wall, rc = _run(cmd, b["run_dir"], log, env=env, timeout=tmo,
                         stdin_path=stdin_path, stdout_path=stdout_path)
 
     elif cond["kind"] == "vmem":
@@ -220,7 +222,7 @@ def run_one(bench, cond_name, cond, repeat, machine, knobs, server, out_dir,
         cmd += [f"{k}={v}" for k, v in (cond.get("env") or {}).items()]
         cmd += [str(b["exe"])] + args
         try:
-            wall, rc = _run(cmd, b["run_dir"], log,
+            wall, rc = _run(cmd, b["run_dir"], log, timeout=tmo,
                             stdin_path=stdin_path, stdout_path=stdout_path)
         finally:
             server.stop()

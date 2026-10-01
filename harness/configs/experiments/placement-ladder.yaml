@@ -14,9 +14,11 @@ benches:
   - fotonik3d_s         #  4827
   - cactubssn_s         #  3460
   - lbm_s               #  1612
-  # gapbs_bfs / gapbs_pr (18045 each) are ported but OUT until the vmem bug is fixed:
-  # random-access apps run ~2000x slower under a constrained DRAM pool (2026-08-27),
-  # so first_touch / vmem_demote would hit the 9000 s timeout.
+  - gapbs_bfs           # 18045  -g 27 Kronecker graph, 16 BFS trials
+  - gapbs_pr            # 18045  same graph, PageRank
+  # GAPBS is back in (2026-10-01): the "~2000x slowdown under a constrained pool" does
+  # not reproduce -- bfs is 1.17x native at 25% DRAM at this scale, 16/16 verified. The
+  # old number came from pools sized off glibc RSS, which is 2.1x too small here.
 conditions:
   - all_dram
   - first_touch

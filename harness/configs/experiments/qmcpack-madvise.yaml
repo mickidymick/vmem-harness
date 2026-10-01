@@ -1,0 +1,14 @@
+# After the madvise override: the kernel no longer rejects mimalloc's purge on vmem
+# pool memory (0 "cannot decommit" warnings, hints counted in vmem stats). Remaining
+# question: the debug allocator still asserts at "process done" -- is that exit-time
+# heap teardown tied to migration, or does it happen with tiering off too? And does
+# the release path (what results use) stay clean?
+name: qmcpack-madvise
+description: madvise override check plus debug-vs-release and tiering-on-vs-off at exit.
+benches: [qmcpack]
+conditions: [first_touch_midebug, base_demote_midebug, base_demote]
+repeats: 2
+overrides:
+  qmcpack:
+    args: "qmcpack_smoke.xml"
+    footprint_vpages: 8599

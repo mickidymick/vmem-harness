@@ -96,3 +96,35 @@ base_demote_midebug_nopurge: # debug mimalloc + purge disabled: verifies the pur
   env:
     MIMALLOC_PURGE_DELAY: -1
     MIMALLOC_VERBOSE: 1
+
+first_touch_midebug:         # debug mimalloc with tiering OFF: is the exit-time
+  kind: vmem                 # heap-teardown assertion related to migration at all?
+  dram_frac: 0.25
+  pmem_frac: 1.30
+  lib: debug
+  knobs: "off"
+
+# --- GAPBS pressure ladder (diagnostic): where does the random-access blowup start?
+ft_75:
+  kind: vmem
+  dram_frac: 0.75
+  pmem_frac: 1.30
+  lib: base
+  knobs: "off"
+  timeout_s: 600
+
+ft_50:
+  kind: vmem
+  dram_frac: 0.50
+  pmem_frac: 1.30
+  lib: base
+  knobs: "off"
+  timeout_s: 600
+
+ft_25:
+  kind: vmem
+  dram_frac: 0.25
+  pmem_frac: 1.30
+  lib: base
+  knobs: "off"
+  timeout_s: 2400

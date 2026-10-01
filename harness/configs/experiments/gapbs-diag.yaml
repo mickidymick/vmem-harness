@@ -1,0 +1,16 @@
+# GAPBS runs ~2000x slower under a CONSTRAINED DRAM pool with tiering OFF
+# (2026-08-27: bfs first_touch at 25% took 28+ min against 0.024 s/trial native),
+# while native Optane costs only 2.8x. With oversized pools vmem matches native
+# exactly (0.0239 s), so the trigger is the pool cap, not the substrate.
+# Walk the DRAM fraction down to find where it breaks, on a small graph with a
+# 10-minute cap per run. -n 2 means the 16-trial validator cannot apply.
+name: gapbs-diag
+description: Find the DRAM fraction where GAPBS random access collapses.
+benches: [gapbs_bfs]
+conditions: [all_dram, ft_75, ft_50, ft_25]
+repeats: 1
+overrides:
+  gapbs_bfs:
+    args: "-g 23 -n 2 -v"
+    footprint_vpages: 1123
+    validate: "grep -c 'Verification:.*PASS' gapbs.out | grep -qx 2"
