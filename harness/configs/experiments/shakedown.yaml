@@ -1,0 +1,29 @@
+# PAPER-SCALE SHAKEDOWN, one repeat: does every benchmark actually run at full size
+# under vmem, and does its answer survive? Everything before this was smoke-sized.
+# Not a result -- single runs, and the endpoint question (native vs through-vmem
+# baselines) is still open, so treat the ratios as provisional.
+#
+# all_dram is here because LULESH/AMG/SNAP/WarpX/QMCPACK check correctness against it;
+# SPEC (specdiff) and GAPBS (its own verifier) validate themselves.
+# Benches are ordered fastest-first so a failure shows up early; lulesh is last
+# (~35 min per run at -s 300). Expect many hours overall.
+name: shakedown
+description: One paper-scale run of every benchmark, native + tiering off + demotion.
+benches:
+  - lbm_s
+  - bwaves_s
+  - fotonik3d_s
+  - roms_s
+  - cactubssn_s
+  - amg
+  - qmcpack
+  - warpx
+  - snap
+  - gapbs_bfs
+  - gapbs_pr
+  - lulesh
+conditions:
+  - all_dram
+  - first_touch
+  - vmem_demote
+repeats: 1
