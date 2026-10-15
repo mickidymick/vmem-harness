@@ -218,8 +218,77 @@ def gap_compare():
     return out
 
 
+# --- Section 9: the paper-scale shakedown (vbench `sweep shakedown`), all 12
+# benchmarks x {all_dram, first_touch, vmem_demote}, one repeat. DATA-DRIVEN from
+# the run's results.tsv; correctness verdicts come from its SUMMARY.txt (the
+# tolerance-checked ones vbench computed), not just exit codes. No all_pmem in
+# this run, so "recovered" is measured against first-touch, not the full gap. ---
+SHAKE_DIR = os.path.join(HERE, '..', 'results', '20261001-144330-sweep-shakedown')
+SHAKE_NAMES = {'lulesh': 'LULESH', 'roms_s': 'roms', 'qmcpack': 'QMCPACK', 'snap': 'SNAP',
+               'cactubssn_s': 'cactuBSSN', 'fotonik3d_s': 'fotonik3d', 'bwaves_s': 'bwaves',
+               'amg': 'AMG', 'lbm_s': 'lbm', 'warpx': 'WarpX', 'gapbs_bfs': 'GAPBS-BFS',
+               'gapbs_pr': 'GAPBS-PR'}
+
+
+def shakedown(run=SHAKE_DIR):
+    try:
+        lines = open(os.path.join(run, 'results.tsv')).read().splitlines()
+        summary = open(os.path.join(run, 'SUMMARY.txt')).read().splitlines()
+    except FileNotFoundError:
+        return None
+    verdict, bench = {}, None
+    for line in summary:
+        if line and not line.startswith(' '):
+            bench = line.strip()
+        m = re.match(r'\s+(\w+)\s+.*\s(ok|\*\*\* MISMATCH \*\*\*)$', line)
+        if bench and m:
+            verdict[(bench, m.group(1))] = m.group(2) == 'ok'
+    hdr = lines[0].lstrip('#').split('\t')
+    raw = {}
+    for line in lines[1:]:
+        if line.strip():
+            r = dict(zip(hdr, line.split('\t')))
+            raw.setdefault(r['bench'], {})[r['condition']] = r
+    out = []
+    for b, c in raw.items():
+        t = {k: float(v['metric']) for k, v in c.items()}
+        dram, ft, vm = t['all_dram'], t['first_touch'], t['vmem_demote']
+        gap = ft - dram
+        vd = c['vmem_demote']
+        fp = {}
+        try:
+            ftxt = open(os.path.join(run, f'footprint-{b}.txt')).read().splitlines()
+            fp['vpages'] = int([l for l in ftxt if l.strip() and not l.startswith('#')][0])
+            m = re.search(r"args='([^']*)'", ftxt[1]) if len(ftxt) > 1 else None
+            fp['args'] = m.group(1) if m else ''
+        except (FileNotFoundError, IndexError, ValueError):
+            pass
+        out.append({
+            'key': b, 'name': SHAKE_NAMES.get(b, b), 'raw': t,
+            'ft_x': round(ft / dram, 3), 'vm_x': round(vm / dram, 3),
+            'rec': round(100 * (ft - vm) / gap, 1) if gap > 0 else None,
+            'delta_s': round(vm - ft, 2),
+            'speedup': round(ft / vm, 3),
+            'fp_vpages': fp.get('vpages'), 'args': fp.get('args', ''),
+            'dram_vpages': int(vd['dram_vpages']), 'pmem_vpages': int(vd['pmem_vpages']),
+            'ok': {k: v['rc'] == '0' and verdict.get((b, k), False) for k, v in c.items()},
+            'check': ', '.join(x.split('=')[0] for x in vd['correctness'].split(';')),
+            'replicas': int(vd['replicas']), 'evictions': int(vd['evictions']),
+            'inval': round(100 * int(vd['invalidated']) / max(1, int(vd['replicas']))),
+        })
+    out.sort(key=lambda e: -1e9 if e['rec'] is None else e['rec'], reverse=True)
+    sp = [e['speedup'] for e in out]
+    return {'run': os.path.basename(os.path.normpath(run)), 'benches': out,
+            # average gain over first-touch: geomean of per-bench speedups (the
+            # standard cross-benchmark average; arithmetic is LULESH-dominated)
+            'geo_speedup': round(st.geometric_mean(sp), 3),
+            'mean_speedup': round(st.mean(sp), 3),
+            'mean_reduction': round(st.mean(100 * (1 - 1 / x) for x in sp), 1)}
+
+
 def collect():
     d = {}
+    d['shake'] = shakedown()
     d['hotset'] = HOTSET
     d['interval'] = INTERVAL
     d['compare'] = COMPARE
@@ -613,6 +682,54 @@ on top of the other (&lt;0.1%, delta printed under each benchmark) shows routing
   <div><div id="fgap"></div><div class="xlab">benchmark</div></div></div>
 </div>
 
+<div id="shake">
+<h2>9. Paper scale: all 12 benchmarks at 25% DRAM</h2>
+<p class="sub">The first time every benchmark ran <b>tiered at full paper-scale input</b> &mdash;
+the <code>vbench</code> shakedown, 12 benchmarks &times; {all-DRAM, first-touch, VMem demote}.
+Runtime = vmem <code>3e281af</code>, with both of the week's fixes in.</p>
+<div class="tiles" id="shakeTiles"></div>
+<p class="muted" id="shakeAvg" style="margin-top:8px"></p>
+
+<h3>Memory footprint &amp; the 25% DRAM budget</h3>
+<p class="gexpl">Each benchmark's <b>measured peak footprint</b> at paper-scale input, counted in VMem's
+2&nbsp;MB pages by <code>vbench measure</code> &mdash; the number every pool below is sized from. (This is
+used instead of glibc RSS, which is blind to hugetlb pages and undercounts.) DRAM is capped at 25% of the
+footprint; the PMEM pool holds the 75% spill plus room for replicas. Last column: VMem demote's speedup
+over first-touch.</p>
+<div id="fShakeFoot"></div>
+
+<h3>Slowdown &mdash; first-touch vs VMem demotion</h3>
+<p class="gexpl">Each benchmark's runtime at 25% DRAM, divided by its own all-DRAM runtime (the dashed
+1&times; line), so different metrics are comparable. <b>First-touch</b> fills DRAM first and spills the rest
+to Optane with tiering off; <b>VMem demote</b> is the same budget with tuned demotion. Lower is better;
+the axis is log because the penalties span 1&times;&ndash;12&times;.</p>
+<div class="legend" style="display:flex;gap:16px;margin:2px 0 6px;font-size:12.5px">
+  <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:3px;background:var(--hs4)"></span>first-touch 25%</span>
+  <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:3px;background:var(--hs1)"></span>VMem demote 25%</span></div>
+<div class="chartrow"><div class="ylab">execution time (× vs all-DRAM, log)</div>
+  <div><div id="fShakeX"></div><div class="xlab">benchmark</div></div></div>
+
+<h3>Where demotion pays &mdash; share of the first-touch penalty recovered</h3>
+<p class="gexpl"><code>(first-touch &minus; VMem) / (first-touch &minus; all-DRAM)</code>: 100% would be all-DRAM speed
+on a quarter of the DRAM. Three benchmarks recover a large share; nine are flat, consistent with demotion
+paying only in a particular regime. Negative = VMem slower than first-touch.</p>
+<div id="fShakeRec"></div>
+
+<h3>Correctness at paper scale</h3>
+<p class="gexpl">Every run checked against the benchmark's own verifier (SPEC <code>specdiff</code>, GAPBS
+verify) or against the all-DRAM answer within a tolerance. Verdicts are vbench's, from
+<code>SUMMARY.txt</code>.</p>
+<div id="fShakeOk"></div>
+
+<div class="finding warn">
+  <p><b>Read these as a shakedown, not the paper figure.</b> One run per bar, so no error bars yet.
+  And there is <b>no all-PMEM</b> condition in this run, so the 5&ndash;12&times; first-touch penalties
+  (lbm, fotonik3d) can't yet be split into real Optane cost vs VMem overhead &mdash; which is also why
+  recovery here is measured against first-touch rather than the full DRAM&harr;PMEM gap of section 8.</p>
+</div>
+<p class="muted" id="shakeProv" style="margin-top:10px"></p>
+</div>
+
 <div class="finding warn" style="margin-top:34px">
   <p><b>Not yet captured.</b> Two of the four microbenchmark groups are missing from this page:
   <b>eviction</b> (background replication under forced DRAM pressure) and <b>promotion</b>
@@ -878,7 +995,100 @@ function build(){
   intv('intv',D.interval);
   cmp('cmp',D.compare);
 
-  drawFoot();drawGap();drawF1();drawF8();
+  drawFoot();drawGap();drawF1();drawF8();drawShake();
+}
+
+// Section 9: paper-scale shakedown — tiles, log slowdown bars, recovery bars, pass grid
+function drawShake(){
+  const S=D.shake; if(!S){document.getElementById('shake').hidden=true;return;}
+  const B=S.benches,C=['all_dram','first_touch','vmem_demote'];
+  const npass=B.reduce((a,b)=>a+C.filter(c=>b.ok[c]).length,0);
+  const won=B.filter(b=>b.rec!=null&&b.rec>=25);
+  const top=B[0];
+  document.getElementById('shakeTiles').innerHTML=[
+    [`${npass}/${B.length*C.length}`,'runs correct at paper scale'],
+    [`${Math.round(top.rec)}%`,`${top.name} penalty recovered`],
+    [`${fmt(top.vm_x,2)}×`,`${top.name} vs all-DRAM (first-touch: ${fmt(top.ft_x,1)}×)`],
+    [`${fmt(S.geo_speedup,2)}×`,`avg speedup over first-touch (+${Math.round(100*(S.geo_speedup-1))}%, geomean)`],
+    [`${won.length} of ${B.length}`,'benchmarks recover ≥25%'],
+  ].map(r=>`<div class="tile"><div class="v">${r[0]}</div><div class="k">${r[1]}</div></div>`).join('');
+  document.getElementById('shakeAvg').innerHTML=
+    `Average gain over first-touch, all ${B.length} benchmarks: <b>${fmt(S.geo_speedup,2)}× geomean speedup (+${Math.round(100*(S.geo_speedup-1))}%)</b> &middot; `+
+    `mean runtime cut ${fmt(S.mean_reduction,1)}% &middot; arithmetic-mean speedup ${fmt(S.mean_speedup,2)}× is pulled up by LULESH's ${fmt(top.speedup,1)}×.`;
+  {const gib=vp=>vp*2/1024,F=B.filter(b=>b.fp_vpages).slice().sort((a,b)=>b.fp_vpages-a.fp_vpages);
+   const tot=F.reduce((a,b)=>a+b.fp_vpages,0);
+   const rows=F.map(b=>`<tr><td>${b.name}</td><td><b>${fmt(gib(b.fp_vpages),1)}</b></td><td>${b.fp_vpages.toLocaleString()}</td>`+
+     `<td>${fmt(gib(b.dram_vpages),1)}</td><td>${fmt(gib(b.pmem_vpages),1)}</td>`+
+     `<td style="color:${b.speedup>=1.1?'var(--text-primary)':'var(--text-muted)'};${b.speedup>=1.1?'font-weight:650':''}">${fmt(b.speedup,2)}×</td>`+
+     `</tr>`).join('');
+   document.getElementById('fShakeFoot').innerHTML=
+     `<div style="overflow-x:auto"><table><tr><th>benchmark</th><th>footprint (GiB)</th><th>2&nbsp;MB pages</th>`+
+     `<th>DRAM cap 25% (GiB)</th><th>PMEM pool (GiB)</th><th>vs first-touch</th></tr>${rows}`+
+     `<tr><td><b>geomean</b></td><td></td><td></td><td></td><td></td><td><b>${fmt(S.geo_speedup,2)}×</b></td></tr></table></div>`;}
+  document.getElementById('shakeProv').textContent=
+    `${S.run} · corsys4 · one repeat · metric units differ per benchmark; the × and % views are the comparable ones.`;
+
+  // --- slowdown, log scale, grouped ---
+  {const W=920,mL=42,mR=12,mT=22,mB=40,gGap=14,H=320,pW=W-mL-mR,pH=H-mT-mB,nb=B.length,gW=(pW-gGap*nb)/nb;
+   const lo=Math.log(0.8),hi=Math.log(14),Y=v=>mT+pH*(1-(Math.log(v)-lo)/(hi-lo));
+   const s=svg(W,H);
+   [1,2,4,8,12].forEach(g=>{
+     s.appendChild(el('line',{x1:mL,x2:mL+pW,y1:Y(g),y2:Y(g),stroke:'var(--grid)','stroke-width':g===1?1.6:1,'stroke-dasharray':g===1?'5 4':''}));
+     const t=el('text',{x:mL-6,y:Y(g)+3,'text-anchor':'end',fill:'var(--text-muted)','font-size':11});t.textContent=g+'×';s.appendChild(t);});
+   const dl=el('text',{x:mL+pW,y:Y(1)-5,'text-anchor':'end',fill:'var(--text-muted)','font-size':11});dl.textContent='all-DRAM';s.appendChild(dl);
+   B.forEach((b,bi)=>{
+     const gx=mL+gGap/2+bi*(gW+gGap),bw=Math.min(30,(gW-4)/2),pad=(gW-bw*2)/2;
+     [['ft_x','hs4','first-touch 25%','first_touch'],['vm_x','hs1','VMem demote 25%','vmem_demote']].forEach((d,i)=>{
+       const v=b[d[0]],x=gx+pad+i*bw,yy=Math.min(Y(v),Y(1)),h=Math.max(2,Math.abs(Y(v)-Y(1)));
+       const y0=v>=1?Y(v):Y(1);
+       const rc=el('rect',{x:x+1,y:y0,width:bw-2,height:h,rx:3,fill:`var(--${d[1]})`,style:'cursor:pointer'});
+       rc.addEventListener('mousemove',e=>showTip(e,`<b style="color:var(--${d[1]})">${b.name} &middot; ${d[2]}</b><br>${fmt(v)}× vs all-DRAM<br>raw ${fmt(b.raw[d[3]],b.raw[d[3]]>=100?0:2)} vs ${fmt(b.raw.all_dram,b.raw.all_dram>=100?0:2)} all-DRAM<br><span style="color:var(--text-muted)">n=1</span>`));
+       rc.addEventListener('mouseleave',hideTip);s.appendChild(rc);
+       if(b.rec!=null&&b.rec>=25){
+         const vt=el('text',{x:i?x+2:x+bw-2,y:Y(v)-5,'text-anchor':i?'start':'end',fill:'var(--text-primary)','font-size':10.5,style:i?'font-weight:700':''});
+         vt.textContent=fmt(v,i?2:1)+'×';s.appendChild(vt);}
+     });
+     const t=el('text',{x:gx+gW/2,y:H-22,'text-anchor':'middle',fill:'var(--text-primary)','font-size':11.5,style:'font-weight:600'});t.textContent=b.name;s.appendChild(t);
+     const sub=el('text',{x:gx+gW/2,y:H-8,'text-anchor':'middle',fill:'var(--text-muted)','font-size':10});
+     sub.textContent=b.rec==null?'no penalty':`${Math.round(b.rec)}%`;s.appendChild(sub);
+   });
+   document.getElementById('fShakeX').appendChild(s);}
+
+  // --- recovery, horizontal; clip big negatives and say so ---
+  {const W=920,mL=110,mR=20,rowH=26,mT=6,mB=28,LO=-20,HI=100,H=mT+B.length*rowH+mB,pW=W-mL-mR;
+   const X=v=>mL+pW*(v-LO)/(HI-LO),s=svg(W,H);
+   [0,25,50,75,100].forEach(g=>{
+     s.appendChild(el('line',{x1:X(g),x2:X(g),y1:mT,y2:H-mB,stroke:g===0?'var(--border)':'var(--grid)','stroke-width':g===0?1.5:1}));
+     const t=el('text',{x:X(g),y:H-mB+16,'text-anchor':'middle',fill:'var(--text-muted)','font-size':11});t.textContent=g+'%';s.appendChild(t);});
+   B.forEach((b,i)=>{
+     const y=mT+i*rowH+4,h=rowH-9,g=el('g');
+     const nm=el('text',{x:mL-10,y:y+h/2+4,'text-anchor':'end',class:'lbl'});nm.textContent=b.name;g.appendChild(nm);
+     let tipH;
+     if(b.rec==null){
+       const t=el('text',{x:X(0)+8,y:y+h/2+4,fill:'var(--text-muted)'});
+       t.textContent='no penalty to recover — first-touch is already at all-DRAM speed';g.appendChild(t);
+       tipH=`<b>${b.name}</b><br>first-touch ${fmt(b.ft_x)}× all-DRAM — nothing to recover`;
+     }else{
+       const v=b.rec,vc=Math.max(LO,v),win=v>=25,clip=v<LO;
+       g.appendChild(el('rect',{x:Math.min(X(0),X(vc)),y,width:Math.max(2,Math.abs(X(vc)-X(0))),height:h,rx:3,
+         fill:win?'var(--hs1)':'var(--hs4)',opacity:win?1:0.55}));
+       const t=el('text',{x:Math.max(X(0),X(vc))+7,y:y+h/2+4,class:win?'lbl':''});
+       t.textContent=`${Math.round(v)}%`+(clip?` (axis clipped — only ${b.delta_s>0?'+':''}${fmt(b.delta_s)} s absolute)`:'');g.appendChild(t);
+       tipH=`<b>${b.name}</b><br>${fmt(v,1)}% of the first-touch penalty recovered<br>first-touch ${fmt(b.ft_x)}× → VMem ${fmt(b.vm_x)}×<br>`+
+         `<span style="color:var(--text-muted)">${b.replicas.toLocaleString()} replicas · ${b.inval}% invalidated by writes · ${b.evictions.toLocaleString()} demotions</span>`;
+     }
+     g.appendChild(el('rect',{x:0,y:y-4,width:W,height:rowH,fill:'transparent'}));
+     g.addEventListener('mousemove',e=>showTip(e,tipH));g.addEventListener('mouseleave',hideTip);
+     s.appendChild(g);});
+   document.getElementById('fShakeRec').appendChild(s);}
+
+  // --- correctness grid ---
+  {const mark=ok=>ok?'<span style="color:var(--hs3);font-weight:700">✓ pass</span>':'<span style="color:var(--hs2);font-weight:700">✗ FAIL</span>';
+   const rows=B.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(b=>
+     `<tr><td>${b.name}</td>${C.map(c=>`<td style="text-align:center">${mark(b.ok[c])}</td>`).join('')}<td style="text-align:left;color:var(--text-muted)"><code>${b.check}</code></td></tr>`).join('');
+   document.getElementById('fShakeOk').innerHTML=
+     `<table><tr><th>benchmark</th><th style="text-align:center">all-DRAM</th><th style="text-align:center">first-touch</th><th style="text-align:center">VMem demote</th><th style="text-align:left">checked</th></tr>${rows}</table>`+
+     `<p class="muted" style="margin-top:8px"><b>${npass} of ${B.length*C.length}</b> runs pass &mdash; no crashes, no timeouts, no mismatches.</p>`;}
 }
 
 // Measured peak RSS per bench: total bar (GiB) split into the 25% DRAM budget
